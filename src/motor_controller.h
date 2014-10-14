@@ -17,8 +17,8 @@
 
 // ** Robot params
 #define TICKS_PER_REV 360     // Ticks per revolution for encoders
-#define WHEEL_RADIUS  0.0352  // Wheel radius [m]
-#define WHEEL_BASE    0.23    // Distance between wheels [m]
+#define WHEEL_RADIUS  0.05  // Wheel radius [m]
+#define WHEEL_BASE    0.205    // Distance between wheels [m]
 
 // ** PID Controllers
 #define KP1 10.0 // 5.0
