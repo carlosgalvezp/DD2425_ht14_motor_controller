@@ -37,7 +37,6 @@ int main (int argc, char* argv[])
         msg.header.seq = 0;
         msg.header.stamp.sec = 0;
         msg.header.stamp.nsec = 0;
-        msg.header.frame_id = '';
 
         // ** Publish
         pwm_pub.publish(msg);
