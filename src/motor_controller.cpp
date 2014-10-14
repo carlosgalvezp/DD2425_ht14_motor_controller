@@ -4,16 +4,16 @@ std::ofstream file;
 
 int main (int argc, char* argv[])
 {
-    file.open("/home/carlos/encoder_data2.txt");
+    //file.open("/home/carlos/encoder_data2.txt");
     // ** Create and initialize ROS node
     ros::init(argc, argv, "motor_controller");
     ros::NodeHandle n;
 
     // ** Publisher
     ros::Publisher pwm_pub = n.advertise<ras_arduino_msgs::PWM>
-                              ("/kobuki/pwm",QUEUE_SIZE);
+                              ("/arduino/pwm",QUEUE_SIZE);
     // ** Subscribers
-    ros::Subscriber encoder_sub = n.subscribe("/kobuki/encoders", 1000, encodersCallback);
+    ros::Subscriber encoder_sub = n.subscribe("/arduino/encoders", 1000, encodersCallback);
     ros::Subscriber twist_sub   = n.subscribe("/motor_controller/twist", 1000, twistCallback);
 
     // ** Initialize controllers
@@ -21,7 +21,7 @@ int main (int argc, char* argv[])
     controller2_ = Controller(KP2, KD2, KI2);
 
     // ** Initialize KalmanFilter
-    initialize_kf();
+    //initialize_kf();
 
     // ** Publish data
     ros::Rate rate(PUBLISH_RATE); // 10 Hz
@@ -34,6 +34,11 @@ int main (int argc, char* argv[])
         // ** Compute control commands
         control(msg.PWM1, msg.PWM2);
 
+        msg.header.seq = 0;
+        msg.header.stamp.sec = 0;
+        msg.header.stamp.nsec = 0;
+        msg.header.frame_id = '';
+
         // ** Publish
         pwm_pub.publish(msg);
 
@@ -42,7 +47,7 @@ int main (int argc, char* argv[])
         rate.sleep();
     }
     std::cout << "Exiting...\n";
-    file.close();
+    //file.close();
 }
 
 void encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
@@ -52,19 +57,21 @@ void encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
     double z2 = (msg->delta_encoder2*2*M_PI*CONTROL_RATE)/(TICKS_PER_REV);
 
     // ** Filter with Kalman Filter
-    Eigen::VectorXd dummy_v(1), z1_v(1), z2_v(1), w1_filtered(1), w2_filtered(1);
-    Eigen::MatrixXd dummy_m(1,1);
-    dummy_v << 0;
-    dummy_m << 0;
-    z1_v << z1;
-    z2_v << z2;
+    //Eigen::VectorXd dummy_v(1), z1_v(1), z2_v(1), w1_filtered(1), w2_filtered(1);
+    //Eigen::MatrixXd dummy_m(1,1);
+    //dummy_v << 0;
+    //dummy_m << 0;
+    //z1_v << z1;
+    //z2_v << z2;
 
-    kf1_.filter(dummy_v, z1_v, w1_filtered, dummy_m);
-    kf2_.filter(dummy_v, z2_v, w2_filtered, dummy_m);
+    //kf1_.filter(dummy_v, z1_v, w1_filtered, dummy_m);
+    //kf2_.filter(dummy_v, z2_v, w2_filtered, dummy_m);
 
     // ** Store the result
-    w1_measured_ = w1_filtered(0);
-    w2_measured_ = w2_filtered(0);
+    //w1_measured_ = w1_filtered(0);
+    //w2_measured_ = w2_filtered(0);
+    w1_measured_ = z1;
+    w2_measured_ = z2;
 }
 
 void twistCallback(const geometry_msgs::Twist::ConstPtr& msg)
@@ -101,11 +108,11 @@ int saturate(const double& x)
     if(x > 255)
         return 255;
     else if (x < -255)
-        return 255;
+        return -255;
     else
         return (int)x;
 }
-
+/*
 void initialize_kf()
 {
     Eigen::MatrixXd A(1,1);
@@ -130,3 +137,4 @@ void initialize_kf()
     kf1_ = KalmanFilter(mu0, sigma0, A, B, C, R, Q_1);
     kf2_ = KalmanFilter(mu0, sigma0, A, B, C, R, Q_2);
 }
+*/
