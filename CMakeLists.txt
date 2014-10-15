@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8.3)
 #set(CMAKE_CXX_FLAGS "-std=c++0x -Wall ${CMAKE_CXX_FLAGS}")
-project(ras_lab1_motor_controller)
+project(motor_controller)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)

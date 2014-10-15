@@ -1,28 +1,121 @@
-#include "motor_controller.h"
+#include <iostream>
 #include <fstream>
-std::ofstream file;
+
+#include "ros/ros.h"
+#include "ras_arduino_msgs/PWM.h"
+#include "ras_arduino_msgs/Encoders.h"
+#include <geometry_msgs/Twist.h>
+
+#include <ras_utils/controller.h>
+#include <ras_utils/kalman_filter.h>
+
+#define PUBLISH_RATE 10 // Hz
+#define CONTROL_RATE 10 // Hz
+#define QUEUE_SIZE 1000
+
+// ** Robot params
+#define TICKS_PER_REV 360     // Ticks per revolution for encoders
+#define WHEEL_RADIUS  0.05  // Wheel radius [m]
+#define WHEEL_BASE    0.205    // Distance between wheels [m]
+
+// ** Kalman Filter params
+#define Q1 3.0 // 0.46     // Sensor noise for wheel 1
+#define Q2 3.0 // 0.55     // Sensor noise for wheel 2
+#define R0  0.2      // Process noise
+#define SIGMA_0 100.0 // Initial uncertainty
+
+class Motor_Controller
+{
+public:
+
+    Motor_Controller(const ros::NodeHandle &n);
+    void run();
+
+private:
+    ros::NodeHandle n_;
+
+    double v_ref_, w_ref_;   // Command v and w from twist
+    double w_l_measured_, w_r_measured_; // Read w1 and w2 from encoders
+
+    Controller controller_l_, controller_r_;
+    KalmanFilter kf1_, kf2_;
+
+    ros::Publisher pwm_pub_;
+    ros::Subscriber encoder_sub_, twist_sub_;
+
+    std::ofstream file;
+
+    double kp_l_, kd_l_, ki_l_, kp_r_, kd_r_, ki_r_;
+    /**
+     * @brief callback function when new msg from encoders is received
+     * @param msg
+     */
+    void encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg);
+
+    /**
+     * @brief callback function when new msg from twist is received
+     * @param msg
+     */
+    void twistCallback(const geometry_msgs::Twist::ConstPtr& msg);
+
+    /**
+     * @brief Saturates control signal to be in the range [-255, 255]
+     * @param x
+     */
+    int saturate(const double& x);
+
+    /**
+     * @brief PID controllers for each wheel
+     * @param PWM1 angular velocity for left wheel
+     * @param PWM2 angular velocity for right wheel
+     */
+    void control(int& PWM_L, int& PWM_R);
+
+    void initialize_kf();
+};
 
 int main (int argc, char* argv[])
 {
-    //file.open("/home/carlos/encoder_data2.txt");
     // ** Create and initialize ROS node
     ros::init(argc, argv, "motor_controller");
     ros::NodeHandle n;
+    Motor_Controller mc(n);
 
+    // ** Run node
+    mc.run();    
+}
+
+Motor_Controller::Motor_Controller(const ros::NodeHandle& n)
+    : n_(n)
+{
+    file.open("/home/ras/wheel.txt");
     // ** Publisher
-    ros::Publisher pwm_pub = n.advertise<ras_arduino_msgs::PWM>
+    pwm_pub_ = n_.advertise<ras_arduino_msgs::PWM>
                               ("/arduino/pwm",QUEUE_SIZE);
     // ** Subscribers
-    ros::Subscriber encoder_sub = n.subscribe("/arduino/encoders", 1000, encodersCallback);
-    ros::Subscriber twist_sub   = n.subscribe("/motor_controller/twist", 1000, twistCallback);
+    encoder_sub_ = n_.subscribe("/arduino/encoders", 1000,
+                                &Motor_Controller::encodersCallback, this);
+    twist_sub_   = n_.subscribe("/motor_controller/twist", 1000,
+                                &Motor_Controller::twistCallback, this);
+    // ** Get parameters
+    n_.getParam("Motor_Controller/KP_L", kp_l_);
+    n_.getParam("Motor_Controller/KD_L", kd_l_);
+    n_.getParam("Motor_Controller/KI_L", ki_l_);
+
+    n_.getParam("Motor_Controller/KP_R", kp_r_);
+    n_.getParam("Motor_Controller/KD_R", kd_r_);
+    n_.getParam("Motor_Controller/KI_R", ki_r_);
 
     // ** Initialize controllers
-    controller1_ = Controller(KP1, KD1, KI1);
-    controller2_ = Controller(KP2, KD2, KI2);
+    controller_l_ = Controller(kp_l_, kd_l_, ki_l_);
+    controller_r_ = Controller(kp_r_, kd_r_, ki_r_);
 
     // ** Initialize KalmanFilter
     //initialize_kf();
+}
 
+void Motor_Controller::run()
+{
     // ** Publish data
     ros::Rate rate(PUBLISH_RATE); // 10 Hz
 
@@ -32,28 +125,23 @@ int main (int argc, char* argv[])
         ras_arduino_msgs::PWM msg;
 
         // ** Compute control commands
-        control(msg.PWM1, msg.PWM2);
-
-        msg.header.seq = 0;
-        msg.header.stamp.sec = 0;
-        msg.header.stamp.nsec = 0;
+        control(msg.PWM2, msg.PWM1);
 
         // ** Publish
-        pwm_pub.publish(msg);
+        pwm_pub_.publish(msg);
 
         // ** Sleep
         ros::spinOnce();
         rate.sleep();
     }
     std::cout << "Exiting...\n";
-    //file.close();
 }
 
-void encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
+void Motor_Controller::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
 {
-    // ** Get the measurement
-    double z1 = (msg->delta_encoder1*2*M_PI*CONTROL_RATE)/(TICKS_PER_REV);
-    double z2 = (msg->delta_encoder2*2*M_PI*CONTROL_RATE)/(TICKS_PER_REV);
+    // ** Get the measurement (the - sign is because we get negative data from encoders)
+    double z_l = -(msg->delta_encoder1*2*M_PI)/(TICKS_PER_REV*msg->timestamp/1000.0);
+    double z_r = -(msg->delta_encoder2*2*M_PI)/(TICKS_PER_REV*msg->timestamp/1000.0);
 
     // ** Filter with Kalman Filter
     //Eigen::VectorXd dummy_v(1), z1_v(1), z2_v(1), w1_filtered(1), w2_filtered(1);
@@ -69,40 +157,36 @@ void encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
     // ** Store the result
     //w1_measured_ = w1_filtered(0);
     //w2_measured_ = w2_filtered(0);
-    w1_measured_ = z1;
-    w2_measured_ = z2;
+    w_l_measured_ = z_l;
+    w_r_measured_ = z_r;
 }
 
-void twistCallback(const geometry_msgs::Twist::ConstPtr& msg)
+void Motor_Controller::twistCallback(const geometry_msgs::Twist::ConstPtr& msg)
 {
     // ** Get linear and angular velocity
     v_ref_ = msg->linear.x;
     w_ref_ = msg->angular.z;
 }
 
-void control(int& PWM1, int& PWM2)
+void Motor_Controller::control(int& PWM_L, int& PWM_R)
 {
     // ** Desired angular velocities from kinematic equations
-    double w1_ref = (v_ref_ - (WHEEL_BASE/2.0) * w_ref_) / WHEEL_RADIUS;
-    double w2_ref = (v_ref_ + (WHEEL_BASE/2.0) * w_ref_) / WHEEL_RADIUS;
+    double w_l_ref = (v_ref_ - (WHEEL_BASE/2.0) * w_ref_) / WHEEL_RADIUS;
+    double w_r_ref = (v_ref_ + (WHEEL_BASE/2.0) * w_ref_) / WHEEL_RADIUS;
 
     ROS_INFO("Desired w: %.3f, %.3f ; Current: %.3f, %.3f\n",
-             w1_ref, w2_ref, w1_measured_, w2_measured_);
+             w_l_ref, w_r_ref, w_l_measured_, w_r_measured_);
 
-//    std::cout << w1_ref << " " << w1_measured_ << " " << w2_ref << " " << w2_measured_ << std::endl;
-
-//    file << w1_ref << " " << w1_measured_ << " " << w2_ref << " " << w2_measured_ << std::endl;
-
+    file <<w_r_measured_<< " "<< w_l_measured_<<std::endl;
     // ** Call PID controller
-    controller1_.setData(w1_ref, w1_measured_);
-    controller2_.setData(w2_ref, w2_measured_);
-    PWM1 = saturate(controller1_.computeControl());
-    PWM2 = saturate(controller2_.computeControl());
-
-    ROS_INFO("Control signals: %i, %i\n", PWM1, PWM2);
+    controller_l_.setData(w_l_ref, w_l_measured_);
+    controller_r_.setData(w_r_ref, w_r_measured_);
+    PWM_L = saturate(controller_l_.computeControl());
+    PWM_R = -saturate(controller_r_.computeControl()); // The motor is reversed
+    ROS_INFO("Control signals (L,R): %i, %i\n", PWM_L, PWM_R);
 }
 
-int saturate(const double& x)
+int Motor_Controller::saturate(const double& x)
 {
     if(x > 255)
         return 255;
