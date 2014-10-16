@@ -8,6 +8,8 @@
   <param name="Motor_Controller/KD_L" value="2.5"/>
   <param name="Motor_Controller/KI_L" value="1.0"/>
 
+  <!-- Ros serial -->
+<node pkg="rosserial_python" type="serial_node.py" name="rosserial" args="_port:=/dev/ttyACM0"/>
 
   <!-- Motor controller -->
   <node pkg="motor_controller" type="motor_controller" name="motor_controller" output = "screen" >

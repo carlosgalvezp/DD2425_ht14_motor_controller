@@ -181,20 +181,12 @@ void Motor_Controller::control(int& PWM_L, int& PWM_R)
     // ** Call PID controller
     controller_l_.setData(w_l_ref, w_l_measured_);
     controller_r_.setData(w_r_ref, w_r_measured_);
-    PWM_L = saturate(controller_l_.computeControl());
-    PWM_R = -saturate(controller_r_.computeControl()); // The motor is reversed
+    PWM_L =  controller_l_.computeControl_Sat();
+    PWM_R = -controller_r_.computeControl_Sat(); // The motor is reversed
     ROS_INFO("Control signals (L,R): %i, %i\n", PWM_L, PWM_R);
 }
 
-int Motor_Controller::saturate(const double& x)
-{
-    if(x > 255)
-        return 255;
-    else if (x < -255)
-        return -255;
-    else
-        return (int)x;
-}
+
 /*
 void initialize_kf()
 {
