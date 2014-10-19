@@ -8,6 +8,7 @@
 
 #include <ras_utils/controller.h>
 #include <ras_utils/kalman_filter.h>
+#include <ras_utils/ras_utils.h>
 
 #define PUBLISH_RATE 10 // Hz
 #define CONTROL_RATE 10 // Hz
@@ -17,6 +18,8 @@
 #define TICKS_PER_REV 360     // Ticks per revolution for encoders
 #define WHEEL_RADIUS  0.05  // Wheel radius [m]
 #define WHEEL_BASE    0.205    // Distance between wheels [m]
+
+#define MIN_PWM_MOTOR 55 // 55
 
 // ** Kalman Filter params
 #define Q1 3.0 // 0.46     // Sensor noise for wheel 1
@@ -88,7 +91,6 @@ int main (int argc, char* argv[])
 Motor_Controller::Motor_Controller(const ros::NodeHandle& n)
     : n_(n)
 {
-    file.open("/home/ras/wheel.txt");
     // ** Publisher
     pwm_pub_ = n_.advertise<ras_arduino_msgs::PWM>
                               ("/arduino/pwm",QUEUE_SIZE);
@@ -107,8 +109,8 @@ Motor_Controller::Motor_Controller(const ros::NodeHandle& n)
     n_.getParam("Motor_Controller/KI_R", ki_r_);
 
     // ** Initialize controllers
-    controller_l_ = Controller(kp_l_, kd_l_, ki_l_);
-    controller_r_ = Controller(kp_r_, kd_r_, ki_r_);
+    controller_l_ = Controller(kp_l_, kd_l_, ki_l_, 255);
+    controller_r_ = Controller(kp_r_, kd_r_, ki_r_, 255);
 
     // ** Initialize KalmanFilter
     //initialize_kf();
@@ -125,8 +127,11 @@ void Motor_Controller::run()
         ras_arduino_msgs::PWM msg;
 
         // ** Compute control commands
+        double pwm2, pwm1;
         control(msg.PWM2, msg.PWM1);
 
+        msg.PWM2 += MIN_PWM_MOTOR * RAS_Utils::sign(msg.PWM2);
+        msg.PWM1 += MIN_PWM_MOTOR * RAS_Utils::sign(msg.PWM1);
         // ** Publish
         pwm_pub_.publish(msg);
 
@@ -174,16 +179,11 @@ void Motor_Controller::control(int& PWM_L, int& PWM_R)
     double w_l_ref = (v_ref_ - (WHEEL_BASE/2.0) * w_ref_) / WHEEL_RADIUS;
     double w_r_ref = (v_ref_ + (WHEEL_BASE/2.0) * w_ref_) / WHEEL_RADIUS;
 
-    ROS_INFO("Desired w: %.3f, %.3f ; Current: %.3f, %.3f\n",
-             w_l_ref, w_r_ref, w_l_measured_, w_r_measured_);
-
-    file <<w_r_measured_<< " "<< w_l_measured_<<std::endl;
     // ** Call PID controller
     controller_l_.setData(w_l_ref, w_l_measured_);
     controller_r_.setData(w_r_ref, w_r_measured_);
-    PWM_L =  controller_l_.computeControl_Sat();
-    PWM_R = -controller_r_.computeControl_Sat(); // The motor is reversed
-    ROS_INFO("Control signals (L,R): %i, %i\n", PWM_L, PWM_R);
+    PWM_L =  (int)controller_l_.computeControl_Sat();
+    PWM_R = -(int)controller_r_.computeControl_Sat(); // The motor is reversed
 }
 
 
