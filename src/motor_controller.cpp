@@ -19,7 +19,7 @@
 #define WHEEL_RADIUS  0.05  // Wheel radius [m]
 #define WHEEL_BASE    0.205    // Distance between wheels [m]
 
-#define MIN_PWM_MOTOR 55 // 55
+#define MIN_PWM_MOTOR 45 // 55
 
 // ** Kalman Filter params
 #define Q1 3.0 // 0.46     // Sensor noise for wheel 1
@@ -130,8 +130,12 @@ void Motor_Controller::run()
         double pwm2, pwm1;
         control(msg.PWM2, msg.PWM1);
 
-        msg.PWM2 += MIN_PWM_MOTOR * RAS_Utils::sign(msg.PWM2);
-        msg.PWM1 += MIN_PWM_MOTOR * RAS_Utils::sign(msg.PWM1);
+	if(msg.PWM2 != 0) {
+        	msg.PWM2 += MIN_PWM_MOTOR * RAS_Utils::sign(msg.PWM2);
+	}
+	if(msg.PWM1 != 0) {
+        	msg.PWM1 += MIN_PWM_MOTOR * RAS_Utils::sign(msg.PWM1);
+	}
         // ** Publish
         pwm_pub_.publish(msg);
 
