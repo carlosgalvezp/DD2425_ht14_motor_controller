@@ -80,7 +80,7 @@ private:
 int main (int argc, char* argv[])
 {
     // ** Create and initialize ROS node
-    ros::init(argc, argv, "motor_controller");
+    ros::init(argc, argv, NODE_MOTOR_CONTROLLER);
     ros::NodeHandle n;
     Motor_Controller mc(n);
 
@@ -93,11 +93,11 @@ Motor_Controller::Motor_Controller(const ros::NodeHandle& n)
 {
     // ** Publisher
     pwm_pub_ = n_.advertise<ras_arduino_msgs::PWM>
-                              ("/arduino/pwm",QUEUE_SIZE);
+                              (TOPIC_ARDUINO_PWM, QUEUE_SIZE);
     // ** Subscribers
-    encoder_sub_ = n_.subscribe("/arduino/encoders", 1000,
+    encoder_sub_ = n_.subscribe(TOPIC_ARDUINO_ENCODERS, 1000,
                                 &Motor_Controller::encodersCallback, this);
-    twist_sub_   = n_.subscribe("/motor_controller/twist", 1000,
+    twist_sub_   = n_.subscribe(TOPIC_MOTOR_CONTROLLER_TWIST, 1000,
                                 &Motor_Controller::twistCallback, this);
     // ** Get parameters
     n_.getParam("Motor_Controller/KP_L", kp_l_);
