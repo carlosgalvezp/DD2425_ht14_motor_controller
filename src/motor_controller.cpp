@@ -9,17 +9,19 @@
 #include <ras_utils/controller.h>
 #include <ras_utils/kalman_filter.h>
 #include <ras_utils/ras_utils.h>
+#include <math.h>
 
-#define PUBLISH_RATE 10 // Hz
-#define CONTROL_RATE 10 // Hz
-#define QUEUE_SIZE 1000
+#define PUBLISH_RATE 50 // Hz
+//#define CONTROL_RATE 10 // Hz
+#define QUEUE_SIZE 1
 
 // ** Robot params
 #define TICKS_PER_REV 360     // Ticks per revolution for encoders
 #define WHEEL_RADIUS  0.05  // Wheel radius [m]
 #define WHEEL_BASE    0.205    // Distance between wheels [m]
 
-#define MIN_PWM_MOTOR 45 // 55
+#define MIN_PWM_MOTOR_L 45 // 55
+#define MIN_PWM_MOTOR_R 47
 
 // ** Kalman Filter params
 #define Q1 3.0 // 0.46     // Sensor noise for wheel 1
@@ -89,7 +91,7 @@ int main (int argc, char* argv[])
 }
 
 Motor_Controller::Motor_Controller(const ros::NodeHandle& n)
-    : n_(n)
+    : n_(n), v_ref_(0), w_ref_(0)
 {
     // ** Publisher
     pwm_pub_ = n_.advertise<ras_arduino_msgs::PWM>
@@ -131,11 +133,16 @@ void Motor_Controller::run()
         control(msg.PWM2, msg.PWM1);
 
 	if(msg.PWM2 != 0) {
-        	msg.PWM2 += MIN_PWM_MOTOR * RAS_Utils::sign(msg.PWM2);
+        	msg.PWM2 += MIN_PWM_MOTOR_L * RAS_Utils::sign(msg.PWM2);
 	}
 	if(msg.PWM1 != 0) {
-        	msg.PWM1 += MIN_PWM_MOTOR * RAS_Utils::sign(msg.PWM1);
+        	msg.PWM1 += MIN_PWM_MOTOR_R * RAS_Utils::sign(msg.PWM1);
 	}
+    if(fabs(v_ref_) < 0.001 && fabs(w_ref_) < 0.001) {
+        msg.PWM1 = 0;
+        msg.PWM2 = 0;
+    }
+
         // ** Publish
         pwm_pub_.publish(msg);
 

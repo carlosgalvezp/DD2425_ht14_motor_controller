@@ -1,6 +1,6 @@
 <launch>
 
-  <param name="Motor_Controller/KP_R" value="2.5"/>
+  <param name="Motor_Controller/KP_R" value="3.0"/>
   <param name="Motor_Controller/KD_R" value="2.5"/>
   <param name="Motor_Controller/KI_R" value="1.0"/>
 
