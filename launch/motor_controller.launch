@@ -1,12 +1,12 @@
 <launch>
 
-  <param name="Motor_Controller/KP_R" value="3.0"/>
-  <param name="Motor_Controller/KD_R" value="2.5"/>
-  <param name="Motor_Controller/KI_R" value="1.0"/>
+  <param name="Motor_Controller/KP_R" value="14.0"/> <!--3.2-->
+  <param name="Motor_Controller/KD_R" value="4.0"/>
+  <param name="Motor_Controller/KI_R" value="1.6"/>
 
-  <param name="Motor_Controller/KP_L" value="2.5"/>
-  <param name="Motor_Controller/KD_L" value="2.5"/>
-  <param name="Motor_Controller/KI_L" value="1.0"/>
+  <param name="Motor_Controller/KP_L" value="13.5"/>
+  <param name="Motor_Controller/KD_L" value="4.0"/>
+  <param name="Motor_Controller/KI_L" value="1.6"/><!--1.5-->
 
   <!-- Ros serial -->
 <node pkg="rosserial_python" type="serial_node.py" name="rosserial" args="_port:=/dev/ttyACM0"/>

@@ -6,6 +6,8 @@
 #include "ras_arduino_msgs/Encoders.h"
 #include <geometry_msgs/Twist.h>
 
+#include "std_msgs/Float64.h"
+
 #include <ras_utils/controller.h>
 #include <ras_utils/kalman_filter.h>
 #include <ras_utils/ras_utils.h>
@@ -48,7 +50,11 @@ private:
     ros::Publisher pwm_pub_;
     ros::Subscriber encoder_sub_, twist_sub_;
 
+    ros::Publisher velleft_pub_, velright_pub_;
+
     std::ofstream file;
+
+    bool started_;
 
     double kp_l_, kd_l_, ki_l_, kp_r_, kd_r_, ki_r_;
     /**
@@ -91,11 +97,16 @@ int main (int argc, char* argv[])
 }
 
 Motor_Controller::Motor_Controller(const ros::NodeHandle& n)
-    : n_(n), v_ref_(0), w_ref_(0)
+    : n_(n), v_ref_(0), w_ref_(0), started_(false)
 {
     // ** Publisher
     pwm_pub_ = n_.advertise<ras_arduino_msgs::PWM>
                               (TOPIC_ARDUINO_PWM, QUEUE_SIZE);
+
+    velleft_pub_ = n_.advertise<std_msgs::Float64>( "/vel_left", QUEUE_SIZE );
+    velright_pub_ = n_.advertise<std_msgs::Float64>( "/vel_right", QUEUE_SIZE );
+
+
     // ** Subscribers
     encoder_sub_ = n_.subscribe(TOPIC_ARDUINO_ENCODERS, 1000,
                                 &Motor_Controller::encodersCallback, this);
@@ -116,6 +127,8 @@ Motor_Controller::Motor_Controller(const ros::NodeHandle& n)
 
     // ** Initialize KalmanFilter
     //initialize_kf();
+
+//    file.open("mc_velocity_data.txt");
 }
 
 void Motor_Controller::run()
@@ -132,16 +145,20 @@ void Motor_Controller::run()
         double pwm2, pwm1;
         control(msg.PWM2, msg.PWM1);
 
-	if(msg.PWM2 != 0) {
-        	msg.PWM2 += MIN_PWM_MOTOR_L * RAS_Utils::sign(msg.PWM2);
-	}
-	if(msg.PWM1 != 0) {
-        	msg.PWM1 += MIN_PWM_MOTOR_R * RAS_Utils::sign(msg.PWM1);
-	}
-    if(fabs(v_ref_) < 0.001 && fabs(w_ref_) < 0.001) {
-        msg.PWM1 = 0;
-        msg.PWM2 = 0;
-    }
+        if(msg.PWM2 != 0) {
+            msg.PWM2 += MIN_PWM_MOTOR_L * RAS_Utils::sign(msg.PWM2);
+        }
+        if(msg.PWM1 != 0) {
+            msg.PWM1 += MIN_PWM_MOTOR_R * RAS_Utils::sign(msg.PWM1);
+        }
+        if(fabs(v_ref_) < 0.001 && fabs(w_ref_) < 0.001) {
+            msg.PWM1 = 0;
+            msg.PWM2 = 0;
+        }
+
+        // ** Make sure to saturate!
+        fabs(msg.PWM1) > 255 ? msg.PWM1 = RAS_Utils::sign(msg.PWM1) * 255 : msg.PWM1;
+        fabs(msg.PWM2) > 255 ? msg.PWM2 = RAS_Utils::sign(msg.PWM2) * 255 : msg.PWM2;
 
         // ** Publish
         pwm_pub_.publish(msg);
@@ -150,11 +167,14 @@ void Motor_Controller::run()
         ros::spinOnce();
         rate.sleep();
     }
+
+    file.close();
     std::cout << "Exiting...\n";
 }
 
 void Motor_Controller::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
 {
+    started_ = true;
     // ** Get the measurement (the - sign is because we get negative data from encoders)
     double z_l = -(msg->delta_encoder1*2*M_PI)/(TICKS_PER_REV*msg->timestamp/1000.0);
     double z_r = -(msg->delta_encoder2*2*M_PI)/(TICKS_PER_REV*msg->timestamp/1000.0);
@@ -175,6 +195,19 @@ void Motor_Controller::encodersCallback(const ras_arduino_msgs::Encoders::ConstP
     //w2_measured_ = w2_filtered(0);
     w_l_measured_ = z_l;
     w_r_measured_ = z_r;
+
+    std_msgs::Float64 msgleft;
+    std_msgs::Float64 msgright;
+
+    msgleft.data = z_l;
+    msgright.data = z_r;
+
+    velleft_pub_.publish(msgleft);
+    velright_pub_.publish(msgright);
+
+
+    //file << z_l << ", " << z_r << std::endl;
+
 }
 
 void Motor_Controller::twistCallback(const geometry_msgs::Twist::ConstPtr& msg)
@@ -186,15 +219,21 @@ void Motor_Controller::twistCallback(const geometry_msgs::Twist::ConstPtr& msg)
 
 void Motor_Controller::control(int& PWM_L, int& PWM_R)
 {
-    // ** Desired angular velocities from kinematic equations
-    double w_l_ref = (v_ref_ - (WHEEL_BASE/2.0) * w_ref_) / WHEEL_RADIUS;
-    double w_r_ref = (v_ref_ + (WHEEL_BASE/2.0) * w_ref_) / WHEEL_RADIUS;
+    PWM_L = 0;
+    PWM_R = 0;
 
-    // ** Call PID controller
-    controller_l_.setData(w_l_ref, w_l_measured_);
-    controller_r_.setData(w_r_ref, w_r_measured_);
-    PWM_L =  (int)controller_l_.computeControl_Sat();
-    PWM_R = -(int)controller_r_.computeControl_Sat(); // The motor is reversed
+    if(started_)
+    {
+        // ** Desired angular velocities from kinematic equations
+        double w_l_ref = (v_ref_ - (WHEEL_BASE/2.0) * w_ref_) / WHEEL_RADIUS;
+        double w_r_ref = (v_ref_ + (WHEEL_BASE/2.0) * w_ref_) / WHEEL_RADIUS;
+
+        // ** Call PID controller
+        controller_l_.setData(w_l_ref, w_l_measured_);
+        controller_r_.setData(w_r_ref, w_r_measured_);
+        PWM_L =  (int)controller_l_.computeControl_Sat();
+        PWM_R = -(int)controller_r_.computeControl_Sat(); // The motor is reversed
+    }
 }
 
 
