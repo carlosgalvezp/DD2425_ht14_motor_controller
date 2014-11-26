@@ -1,11 +1,11 @@
 <launch>
 
-  <param name="Motor_Controller/KP_R" value="14.0"/> <!--3.2-->
-  <param name="Motor_Controller/KD_R" value="4.0"/>
+  <param name="Motor_Controller/KP_R" value="10.0"/> <!--3.2-->
+  <param name="Motor_Controller/KD_R" value="3.0"/>
   <param name="Motor_Controller/KI_R" value="1.6"/>
 
-  <param name="Motor_Controller/KP_L" value="13.5"/>
-  <param name="Motor_Controller/KD_L" value="4.0"/>
+  <param name="Motor_Controller/KP_L" value="9.5"/>
+  <param name="Motor_Controller/KD_L" value="3.0"/>
   <param name="Motor_Controller/KI_L" value="1.6"/><!--1.5-->
 
   <!-- Ros serial -->
