@@ -142,7 +142,6 @@ void Motor_Controller::run()
         ras_arduino_msgs::PWM msg;
 
         // ** Compute control commands
-        double pwm2, pwm1;
         control(msg.PWM2, msg.PWM1);
 
         if(msg.PWM2 != 0) {
