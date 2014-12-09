@@ -12,7 +12,7 @@
 <node pkg="rosserial_python" type="serial_node.py" name="rosserial" args="_port:=/dev/ttyACM0"/>
 
   <!-- Motor controller -->
-  <node pkg="motor_controller" type="motor_controller" name="motor_controller" output = "screen" >
-	
-  </node>
+  <node pkg="motor_controller" type="motor_controller" name="motor_controller" output = "screen" />
+
+
 </launch>
